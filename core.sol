@@ -24,6 +24,7 @@ interface ISupraOraclePull {
 }
 
 interface IBrokexVault {
+    function availableForTrading() external view returns (uint256);
     function lpFreeCapital() external view returns (uint256);
     function lockCapital(uint256 amount) external;
     function unlockCapital(uint256 amount) external;
@@ -289,6 +290,7 @@ contract BrokexCore {
         stable = IERC20(stableToken);
         oracle = ISupraOraclePull(supraOracle);
         vault  = IBrokexVault(vaultAddress);
+        if (!stable.approve(vaultAddress, type(uint256).max)) revert TransferFailed();
 
         emit OwnershipTransferred(address(0), msg.sender);
     }
@@ -683,6 +685,10 @@ contract BrokexCore {
         if (matchedCount != activeAssetCount) revert ProofCountMismatch();
     }
 
+    function getGlobalUnrealizedPnl(bytes calldata proof) external returns (int256) {
+        return this.unrealizedPnL(proof);
+    }
+
     /// @notice Computes unrealized PnL for a single asset given a current price.
     /// @dev From the protocol's perspective:
     ///      - If longs are winning (price up), vault owes them → positive PnL for traders → negative for vault
@@ -797,7 +803,7 @@ contract BrokexCore {
         uint256 newNeedLock = _calculateNeedLock(newRiskL, newRiskS, cfg);
 
         if (newNeedLock > oldNeedLock) {
-            if (newNeedLock - oldNeedLock > vault.lpFreeCapital()) return false;
+            if (newNeedLock - oldNeedLock > vault.availableForTrading()) return false;
         }
 
         if (commission > 0) {
@@ -988,7 +994,7 @@ contract BrokexCore {
         uint256 newNeedLock = _calculateNeedLock(newRiskL, newRiskS, cfg);
 
         if (newNeedLock > oldNeedLock) {
-            if (newNeedLock - oldNeedLock > vault.lpFreeCapital()) revert InsufficientVaultCapital();
+            if (newNeedLock - oldNeedLock > vault.availableForTrading()) revert InsufficientVaultCapital();
         }
     }
 
